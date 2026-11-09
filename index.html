@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Blockdown Mobile FPS</title>
+  <style>
+    :root {
+      --bg: #0c0d11;
+      --panel: rgba(0,0,0,0.28);
+      --accent: #eb5639;
+      --accent2: #ffd36b;
+      --text: #f2f2f2;
+      --muted: #d5d9e2;
+      --shadow: rgba(0,0,0,0.35);
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      touch-action: none;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+    }
+
+    #game {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: #12151d;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #111;
+    }
+
+    #hud {
+      position: absolute;
+      inset: 12px 14px auto 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-shadow: 1px 2px 4px rgba(0,0,0,0.7);
+      pointer-events: none;
+      z-index: 20;
+      font-size: clamp(0.8rem, 2.4vw, 1.1rem);
+    }
+
+    #health, #score {
+      background: rgba(0,0,0,0.2);
+      padding: 6px 10px;
+      border-radius: 999px;
+      backdrop-filter: blur(2px);
+    }
+
+    #overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.54);
+      display: grid;
+      place-items: center;
+      z-index: 40;
+      padding: 24px;
+    }
+
+    #overlay.hidden {
+      display: none;
+    }
+
+    #panel {
+      max-width: 520px;
+      text-align: center;
+      background: rgba(15, 18, 23, 0.72);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 22px;
+      padding: 26px 20px 22px;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(2.2rem, 7vw, 4.2rem);
+      letter-spacing: 0.08em;
+    }
+
+    .small {
+      margin: 8px 0;
+      font-size: clamp(0.9rem, 2.3vw, 1.15rem);
+      line-height: 1.55;
+      color: var(--muted);
+    }
+
+    #start {
+      margin-top: 12px;
+      border: 0;
+      background: linear-gradient(180deg, #ff7d56, #e95135);
+      color: white;
+      font-size: 1.08rem;
+      font-weight: 900;
+      min-width: 195px;
+      min-height: 52px;
+      border-radius: 999px;
+      letter-spacing: 0.08em;
+      padding: 12px 22px;
+      box-shadow: 0 12px 25px rgba(232, 92, 57, 0.35);
+      cursor: pointer;
+    }
+
+    .touch-zone {
+      position: absolute;
+      bottom: 28px;
+      width: 150px;
+      height: 150px;
+      z-index: 30;
+      user-select: none;
+      touch-action: none;
+      pointer-events: auto;
+    }
+
+    #move-zone {
+      left: 22px;
+    }
+
+    #look-zone {
+      right: 22px;
+    }
+
+    .stick-base {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.2);
+      box-shadow: inset 0 0 20px rgba(255,255,255,0.06), 0 12px 20px rgba(0,0,0,0.18);
+    }
+
+    .stick-thumb {
+      position: absolute;
+      width: 62px;
+      height: 62px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.17);
+      box-shadow: inset 0 0 18px rgba(255,255,255,0.14), 0 8px 18px rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,255,255,0.18);
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    #fire-button {
+      position: absolute;
+      right: 26px;
+      bottom: 180px;
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      border: 0;
+      background: radial-gradient(circle at 35% 30%, #ffaf7c, #e04d36 68%);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.28), inset 0 0 20px rgba(255,255,255,0.17);
+      color: white;
+      font-weight: 900;
+      font-size: 1rem;
+      letter-spacing: 0.12em;
+      z-index: 30;
+      touch-action: manipulation;
+    }
+
+    @media (max-width: 420px) {
+      .touch-zone {
+        width: 132px;
+        height: 132px;
+      }
+
+      #move-zone { left: 12px; }
+      #look-zone { right: 12px; }
+
+      #fire-button {
+        width: 96px;
+        height: 96px;
+        bottom: 160px;
+        right: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main id="game">
+    <canvas id="screen" width="960" height="540"></canvas>
+
+    <div id="hud">
+      <div id="health">HEALTH 100</div>
+      <div id="score">THUGS 0</div>
+    </div>
+
+    <div id="overlay">
+      <div id="panel">
+        <h1>BLOCKDOWN</h1>
+        <p class="small">Run through the block and clear the thugs.</p>
+        <p class="small">Desktop: WASD + mouse + click<br>Mobile: move stick + aim stick + fire button</p>
+        <button id="start">START</button>
+      </div>
+    </div>
+
+    <div id="move-zone" class="touch-zone">
+      <div class="stick-base"></div>
+      <div class="stick-thumb" id="move-thumb"></div>
+    </div>
+
+    <div id="look-zone" class="touch-zone">
+      <div class="stick-base"></div>
+      <div class="stick-thumb" id="look-thumb"></div>
+    </div>
+
+    <button id="fire-button">FIRE</button>
+  </main>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById("screen");
+      const ctx = canvas.getContext("2d");
+      const overlay = document.getElementById("overlay");
+      const startBtn = document.getElementById("start");
+      const healthLabel = document.getElementById("health");
+      const scoreLabel = document.getElementById("score");
+      const fireButton = document.getElementById("fire-button");
+      const moveZone = document.getElementById("move-zone");
+      const lookZone = document.getElementById("look-zone");
+      const moveThumb = document.getElementById("move-thumb");
+      const lookThumb = document.getElementById("look-thumb");
+
+      const W = canvas.width, H = canvas.height;
+      const FOV = Math.PI / 3;
+      const keys = {};
+      const mobile = {
+        moveX: 0, moveY: 0,
+        lookX: 0, lookY: 0,
+        fired: false
+      };
+
+      const map = [
+        "111111111111",
+        "100000000001",
+        "100010010001",
+        "100010000001",
+        "100000100001",
+        "101000000101",
+        "100000000001",
+        "100100010001",
+        "100000000001",
+        "100010000001",
+        "100000000001",
+        "111111111111"
+      ];
+
+      const mapW = map[0].length;
+      const mapH = map.length;
+
+      const player = {
+        x: 2.5,
+        y: 2.5,
+        angle: 0,
+        health: 100
+      };
+
+      let enemies = [];
+      let running = false;
+      let score = 0;
+      let lastTime = 0;
+      let shotFlash = 0;
+      let damageFlash = 0;
+      let depthBuffer = new Float32Array(W);
+
+      function resetGame() {
+        player.x = 2.5;
+        player.y = 2.5;
+        player.angle = 0;
+        player.health = 100;
+        score = 0;
+        shotFlash = 0;
+        damageFlash = 0;
+        enemies = [
+          { x: 8.5, y: 2.5, hp: 2 },
+          { x: 9.5, y: 5.5, hp: 2 },
+          { x: 3.5, y: 8.5, hp: 2 },
+          { x: 8.5, y: 9.5, hp: 2 },
+          { x: 6.5, y: 6.5, hp: 2 },
+          { x: 2.5, y: 10.0, hp: 2 }
+        ];
+        updateHud();
+      }
+
+      function wallAt(x, y) {
+        const mx = Math.floor(x);
+        const my = Math.floor(y);
+        return mx < 0 || my < 0 || mx >= mapW || my >= mapH || map[my][mx] === "1";
+      }
+
+      function castRay(angle) {
+        let distance = 0;
+        const dx = Math.cos(angle), dy = Math.sin(angle);
+        while (distance < 20) {
+          distance += 0.025;
+          const x = player.x + dx * distance;
+          const y = player.y + dy * distance;
+          if (wallAt(x, y)) return distance;
+        }
+        return 20;
+      }
+
+      function updateHud() {
+        healthLabel.textContent = `HEALTH ${Math.ceil(player.health)}`;
+        scoreLabel.textContent = `THUGS ${score}`;
+      }
+
+      function movePlayer(dx, dy) {
+        const radius = 0.18;
+        const nextX = player.x + dx;
+        const nextY = player.y + dy;
+
+        if (!wallAt(nextX + Math.sign(dx || 1) * radius, player.y)) {
+          player.x = nextX;
+        }
+        if (!wallAt(player.x, nextY + Math.sign(dy || 1) * radius)) {
+          player.y = nextY;
+        }
+      }
+
+      function updateMovement(dt) {
+        const keyboardMoveX =
+          (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
+        const keyboardMoveY =
+          (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+
+        const moveX = keyboardMoveX + mobile.moveX;
+        const moveY = keyboardMoveY + mobile.moveY;
+
+        const moveLen = Math.hypot(moveX, moveY) || 1;
+        const normalizedX = moveX / moveLen;
+        const normalizedY = moveY / moveLen;
+
+        if (moveLen > 0.1) {
+          const s = 2.4 * dt;
+          const forwardX = Math.cos(player.angle) * normalizedY;
+          const forwardY = Math.sin(player.angle) * normalizedY;
+          const strafeX = Math.cos(player.angle + Math.PI / 2) * normalizedX;
+          const strafeY = Math.sin(player.angle + Math.PI / 2) * normalizedX;
+
+          movePlayer((forwardX + strafeX) * s, (forwardY + strafeY) * s);
+        }
+      }
+
+      function applyLookInput(dt) {
+        const lookX = mobile.lookX;
+        if (Math.abs(lookX) > 0.08) {
+          player.angle += lookX * 3.3 * dt;
+        }
+      }
+
+      function renderWorld() {
+        const sky = ctx.createLinearGradient(0, 0, 0, H * 0.5);
+        sky.addColorStop(0, "#4f5d74");
+        sky.addColorStop(1, "#d4c9a8");
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, W, H * 0.5);
+
+        const floor = ctx.createLinearGradient(0, H * 0.5, 0, H);
+        floor.addColorStop(0, "#5d564f");
+        floor.addColorStop(1, "#1e1e22");
+        ctx.fillStyle = floor;
+        ctx.fillRect(0, H / 2, W, H / 2);
+
+        for (let x = 0; x < W; x++) {
+          const rayAngle = player.angle + Math.atan((2 * x / W - 1) * Math.tan(FOV / 2));
+          const dist = castRay(rayAngle);
+          const corrected = Math.max(0.01, dist * Math.cos(rayAngle - player.angle));
+          depthBuffer[x] = corrected;
+          const wallH = Math.min(H * 1.8, H / corrected);
+          const top = (H - wallH) / 2;
+          const shade = Math.max(30, 170 - corrected * 18);
+          const stripe = ((x / 8) % 2) ? 0 : 10;
+          ctx.fillStyle = `rgb(${shade + stripe},${shade + stripe},${shade - 8})`;
+          ctx.fillRect(x, top, 1, wallH);
+        }
+
+        renderEnemies();
+      }
+
+      function renderEnemies() {
+        const visible = enemies
+          .map(enemy => {
+            let angle = Math.atan2(enemy.y - player.y, enemy.x - player.x) - player.angle;
+            while (angle > Math.PI) angle -= Math.PI * 2;
+            while (angle < -Math.PI) angle += Math.PI * 2;
+
+            return {
+              ...enemy,
+              angle,
+              dist: Math.hypot(enemy.x - player.x, enemy.y - player.y)
+            };
+          })
+          .filter(enemy => Math.abs(enemy.angle) < FOV / 2 + 0.18)
+          .sort((a, b) => b.dist - a.dist);
+
+        for (const enemy of visible) {
+          const screenX = W / 2 + Math.tan(enemy.angle) * (W / 2) / Math.tan(FOV / 2);
+          const size = Math.min(H * 0.8, H / enemy.dist * 0.72);
+          const left = screenX - size * 0.25;
+          const top = H / 2 - size * 0.48;
+
+          const centerColumn = Math.max(0, Math.min(W - 1, Math.floor(screenX)));
+          if (enemy.dist > depthBuffer[centerColumn] + 0.15) continue;
+
+          ctx.fillStyle = "#121416";
+          ctx.fillRect(left + size * 0.10, top + size * 0.30, size * 0.30, size * 0.55);
+          ctx.beginPath();
+          ctx.arc(screenX, top + size * 0.20, size * 0.15, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = "#a14a3a";
+          ctx.fillRect(left + size * 0.08, top + size * 0.48, size * 0.34, size * 0.12);
+
+          ctx.fillStyle = "#e6e6e6";
+          ctx.fillRect(screenX - size * 0.08, top + size * 0.17, size * 0.04, size * 0.035);
+          ctx.fillRect(screenX + size * 0.04, top + size * 0.17, size * 0.04, size * 0.035);
+        }
+      }
+
+      function shoot() {
+        if (!running) return;
+        shotFlash = 0.08;
+
+        let target = null;
+        let nearest = Infinity;
+
+        for (const enemy of enemies) {
+          let angle = Math.atan2(enemy.y - player.y, enemy.x - player.x) - player.angle;
+          while (angle > Math.PI) angle -= Math.PI * 2;
+          while (angle < -Math.PI) angle += Math.PI * 2;
+
+          const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+          const aimWindow = Math.atan(0.30 / Math.max(0.15, dist));
+
+          if (Math.abs(angle) < aimWindow && dist < nearest) {
+            target = enemy;
+            nearest = dist;
+          }
+        }
+
+        if (target) {
+          target.hp -= 1;
+          if (target.hp <= 0) {
+            enemies = enemies.filter(e => e !== target);
+            score++;
+            updateHud();
+            if (enemies.length === 0) {
+              endGame("BLOCK CLEARED", "You cleared the block.");
+            }
+          }
+        }
+      }
+
+      function endGame(title, message) {
+        running = false;
+        document.exitPointerLock?.();
+        overlay.classList.remove("hidden");
+        const panel = document.getElementById("panel");
+        panel.innerHTML = `
+          <h1>${title}</h1>
+          <p class="small">${message}</p>
+          <p class="small">You eliminated ${score} thug${score === 1 ? "" : "s"}.</p>
+          <button id="start">PLAY AGAIN</button>
+        `;
+        document.getElementById("start").addEventListener("click", beginGame);
+      }
+
+      function beginGame() {
+        resetGame();
+        running = true;
+        overlay.classList.add("hidden");
+        canvas.requestPointerLock?.();
+        lastTime = performance.now();
+      }
+
+      function updateEnemies(dt) {
+        for (const enemy of enemies) {
+          const dx = player.x - enemy.x;
+          const dy = player.y - enemy.y;
+          const dist = Math.hypot(dx, dy);
+
+          if (dist > 0.7 && dist < 8) {
+            const step = Math.min(0.75 * dt, dist * 0.08);
+            const nx = enemy.x + (dx / dist) * step;
+            const ny = enemy.y + (dy / dist) * step;
+
+            if (!wallAt(nx, enemy.y)) enemy.x = nx;
+            if (!wallAt(enemy.x, ny)) enemy.y = ny;
+          } else if (dist <= 0.7) {
+            player.health = Math.max(0, player.health - 16 * dt);
+            damageFlash = 0.18;
+            updateHud();
+
+            if (player.health <= 0) {
+              endGame("YOU'RE DOWN", "The block got the better of you.");
+            }
+          }
+        }
+      }
+
+      function drawWeapon() {
+        ctx.fillStyle = "#20242c";
+        ctx.beginPath();
+        ctx.moveTo(W * 0.40, H);
+        ctx.lineTo(W * 0.44, H * 0.77);
+        ctx.lineTo(W * 0.57, H * 0.77);
+        ctx.lineTo(W * 0.62, H);
+        ctx.fill();
+
+        ctx.fillStyle = "#4c4f57";
+        ctx.fillRect(W * 0.47, H * 0.73, W * 0.07, H * 0.13);
+
+        if (shotFlash > 0) {
+          ctx.fillStyle = "#ffd76a";
+          ctx.beginPath();
+          ctx.moveTo(W / 2, H * 0.69);
+          ctx.lineTo(W / 2 - 24, H * 0.56);
+          ctx.lineTo(W / 2, H * 0.60);
+          ctx.lineTo(W / 2 + 24, H * 0.56);
+          ctx.fill();
+        }
+
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(W / 2 - 10, H / 2); ctx.lineTo(W / 2 - 3, H / 2);
+        ctx.moveTo(W / 2 + 3, H / 2); ctx.lineTo(W / 2 + 10, H / 2);
+        ctx.moveTo(W / 2, H / 2 - 10); ctx.lineTo(W / 2, H / 2 - 3);
+        ctx.moveTo(W / 2, H / 2 + 3); ctx.lineTo(W / 2, H / 2 + 10);
+        ctx.stroke();
+
+        if (damageFlash > 0) {
+          ctx.fillStyle = `rgba(210, 45, 32, ${damageFlash * 0.65})`;
+          ctx.fillRect(0, 0, W, H);
+        }
+      }
+
+      function update(dt) {
+        if (!running) return;
+
+        updateMovement(dt);
+        applyLookInput(dt);
+        updateEnemies(dt);
+
+        shotFlash = Math.max(0, shotFlash - dt);
+        damageFlash = Math.max(0, damageFlash - dt);
+
+        if (keys.ArrowLeft) player.angle -= 2.1 * dt;
+        if (keys.ArrowRight) player.angle += 2.1 * dt;
+
+        if (keys.Space || mobile.fired) {
+          shoot();
+          mobile.fired = false;
+        }
+      }
+
+      function frame(ts) {
+        const dt = Math.min(0.04, (ts - lastTime) / 1000 || 0);
+        lastTime = ts;
+        update(dt);
+        renderWorld();
+        drawWeapon();
+        requestAnimationFrame(frame);
+      }
+
+      function clampStick(x, y) {
+        const r = 34;
+        const dist = Math.hypot(x, y);
+        if (dist > r) {
+          const angle = Math.atan2(y, x);
+          x = Math.cos(angle) * r;
+          y = Math.sin(angle) * r;
+        }
+        return { x, y };
+      }
+
+      function bindThumb(el, zone, inputKeyX, inputKeyY) {
+        let activePointerId = null;
+
+        const updateStick = (e) => {
+          const rect = zone.getBoundingClientRect();
+          const dx = e.clientX - (rect.left + rect.width / 2);
+          const dy = e.clientY - (rect.top + rect.height / 2);
+          const pos = clampStick(dx, dy);
+          el.style.left = `calc(50% + ${pos.x}px)`;
+          el.style.top = `calc(50% + ${pos.y}px)`;
+          mobile[inputKeyX] = pos.x / 34;
+          // Pushing the movement stick up means moving forward.
+          mobile[inputKeyY] = (inputKeyY === "moveY" ? -pos.y : pos.y) / 34;
+        };
+
+        const releaseStick = (e) => {
+          if (e.pointerId !== activePointerId) return;
+          activePointerId = null;
+          el.style.left = "50%";
+          el.style.top = "50%";
+          mobile[inputKeyX] = 0;
+          mobile[inputKeyY] = 0;
+          if (zone.hasPointerCapture?.(e.pointerId)) {
+            zone.releasePointerCapture(e.pointerId);
+          }
+        };
+
+        zone.addEventListener("pointerdown", (e) => {
+          if (activePointerId !== null) return;
+          e.preventDefault();
+          activePointerId = e.pointerId;
+          zone.setPointerCapture?.(e.pointerId);
+          updateStick(e);
+        });
+
+        zone.addEventListener("pointermove", (e) => {
+          if (e.pointerId !== activePointerId) return;
+          e.preventDefault();
+          updateStick(e);
+        });
+
+        zone.addEventListener("pointerup", releaseStick);
+        zone.addEventListener("pointercancel", releaseStick);
+        zone.addEventListener("lostpointercapture", releaseStick);
+      }
+
+      bindThumb(moveThumb, moveZone, "moveX", "moveY");
+      bindThumb(lookThumb, lookZone, "lookX", "lookY");
+
+      fireButton.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        mobile.fired = true;
+        shoot();
+      });
+
+      fireButton.addEventListener("pointerup", () => {
+        mobile.fired = false;
+      });
+
+      startBtn.addEventListener("click", beginGame);
+
+      document.addEventListener("mousemove", (e) => {
+        if (running && document.pointerLockElement === canvas) {
+          player.angle += e.movementX * 0.0025;
+        }
+      });
+
+      canvas.addEventListener("click", () => {
+        if (running) shoot();
+      });
+
+      document.addEventListener("keydown", (e) => {
+        keys[e.code] = true;
+        if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) {
+          e.preventDefault();
+        }
+      });
+
+      document.addEventListener("keyup", (e) => {
+        keys[e.code] = false;
+      });
+
+      document.addEventListener("pointerlockchange", () => {
+        if (!document.pointerLockElement && running) {
+          running = false;
+          overlay.classList.remove("hidden");
+        }
+      });
+
+      resetGame();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
